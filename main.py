@@ -9,6 +9,9 @@ import time
 
 from author import TKN, usrnme, psswrd
 
+# from selenium.webdriver.common.action_chains import ActionChains
+
+
 # путь к  ChromeDriver
 driver_path = r'C:\Users\Даниил-ПК\Downloads\chromedriver-win64\chromedriver-win64\chromedriver.exe'
 
@@ -85,59 +88,90 @@ def get_pins(message):
     try:
         # Разбираем команду пользователя
         command_parts = message.text.split()
+# сделать проверку команды
+        if (len(command_parts) > 2 and command_parts[2].isdigit()) or len(command_parts) == 2:
 
-        # Извлекаем никнейм
-        user_name = command_parts[1]
-        url = f"https://ru.pinterest.com/{user_name}/pins/"
-        driver.get(url)
-        response = requests.get(url)
-        if response.status_code == 200:
-            bot.reply_to(message, "Происходит загрузка фотографий!")
-            driver.implicitly_wait(15)
-            time.sleep(1)
-            soup = BeautifulSoup(driver.page_source, 'html.parser')
-            images = soup.find_all('a', class_="Wk9 xQ4 CCY S9z DUt iyn kVc agv LIa")
+            if len(command_parts) > 2:
+                photo_count = int(command_parts[2])
 
-            if images:
-                # Извлекаем число фотографий, если указано
-                photo_count = int(command_parts[2]) if len(command_parts) > 2 else 1
-                for _ in range(photo_count):
-                    # Проверяем, если текущий пользователь не совпадает с предыдущим
-                    if last_username != user_name:
-                        last_username = user_name
-                        last_photo_index = None
-                        current_photo_index = 0
+            # Извлекаем никнейм
+            user_name = command_parts[1]
+            url = f"https://ru.pinterest.com/{user_name}/pins/"
+            driver.get(url)
+            response = requests.get(url)
+            if response.status_code == 200:
 
-                    # Проверяем, если есть еще фотографии для загрузки
-                    if current_photo_index < len(images):
-                        photo_url = images[current_photo_index]['href']
-                        driver.get(f"https://ru.pinterest.com{photo_url}")
-                        driver.implicitly_wait(10)
-                        time.sleep(1)
-                        # Получаем исходный код страницы после перехода
-                        current_page_source = driver.page_source
+                bot.reply_to(message, "Происходит загрузка фотографий!")
+                driver.implicitly_wait(15)
+                time.sleep(2.5)
 
-                        # Создаем новый объект BeautifulSoup для новой страницы
-                        current_soup = BeautifulSoup(current_page_source, 'html.parser')
+                soup = BeautifulSoup(driver.page_source, 'html.parser')
+                images = soup.find_all('a', class_="Wk9 xQ4 CCY S9z DUt iyn kVc agv LIa")
 
-                        # Находим все теги img для изображений
-                        imgs = current_soup.find_all('img', class_="hCL kVc L4E MIw")
-                        if imgs:
-                            # Получаем ссылку на изображение
-                            img_src = imgs[1]['src']
+                if images:
 
-                            # Отправляем сообщение с изображением
-                            bot.send_photo(message.chat.id, photo=img_src,
-                                           caption=f"Изображение {current_photo_index + 1}")
-                        current_photo_index += 1
-                        driver.back()
-                    else:
-                        bot.reply_to(message, f"Количество запрошенных фотографий превышает количество доступных.")
-                        break
+                    # Извлекаем число фотографий, если указано
+                    photo_count = int(command_parts[2]) if len(command_parts) > 2 else 1
+                    for _ in range(photo_count):
+                        # Проверяем, если текущий пользователь не совпадает с предыдущим (переместить!)
+                        if last_username != user_name:
+                            last_username = user_name
+                            last_photo_index = None
+                            current_photo_index = 0
+                        time.sleep(1.5)
+                        for _ in range(current_photo_index // 5):
+
+                            body = driver.find_element("tag name", "body")
+
+                            body.send_keys(Keys.PAGE_DOWN)
+                            time.sleep(0.125)
+
+                        time.sleep(1.5)
+                        soup = BeautifulSoup(driver.page_source, 'html.parser')
+                        images = soup.find_all('a', class_="Wk9 xQ4 CCY S9z DUt iyn kVc agv LIa")
+                        # Проверяем, если есть еще фотографии для загрузки
+                        if current_photo_index < len(images):
+                            photo_url = images[current_photo_index]['href']
+                            driver.get(f"https://ru.pinterest.com{photo_url}")
+                            driver.implicitly_wait(10)
+
+                            body = driver.find_element("tag name", "body")
+                            body.send_keys(Keys.PAGE_DOWN)
+                            body.send_keys(Keys.PAGE_DOWN)
+
+                            time.sleep(1)
+                            # Получаем исходный код страницы после перехода
+                            current_page_source = driver.page_source
+
+                            # Создаем новый объект BeautifulSoup для новой страницы
+                            current_soup = BeautifulSoup(current_page_source, 'html.parser')
+
+                            # Находим все теги img для изображений
+                            imgs = current_soup.find_all('img', class_="hCL kVc L4E MIw")
+                            if imgs:
+                                # Получаем ссылку на изображение
+                                img_src = imgs[1]['src']
+    # в теории можно перемещаться к последнему сохраненному src, обновлять поиск
+    # и продолжать сбор изображений, но новый поиск должен обязательно начинаться с следующего изображения
+    # что вызывает некоторые изъяны
+
+                                # Отправляем сообщение с изображением
+                                bot.send_photo(message.chat.id, photo=img_src,
+                                               caption=f"Изображение {current_photo_index + 1}")
+                            current_photo_index += 1
+
+                            driver.back()
+
+                        else:
+                            bot.reply_to(message, f"Количество запрошенных фотографий превышает количество доступных "
+                                                  f"боту. Попробуйте использовать команду еще раз.")
+                            break
+                else:
+                    bot.reply_to(message, "К сожалению, фотографии не найдены.")
             else:
-                bot.reply_to(message, "К сожалению, фотографии не найдены.")
+                bot.reply_to(message, f"Ошибка при запросе к Pinterest. Код статуса: {response.status_code}")
         else:
-            bot.reply_to(message, f"Ошибка при запросе к Pinterest. Код статуса: {response.status_code}")
+            bot.reply_to(message, f"Число пинов должно быть положительным целым числом больше нуля")
     except IndexError:
         bot.reply_to(message, "Используйте команду /get_pins {никнейм} [число пинов]")
 
